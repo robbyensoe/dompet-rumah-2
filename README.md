@@ -1,8 +1,8 @@
-# dompet-rumah
+# dompet-rumah-2
 
 [![make.fun · best-household-budget-site-20261126-1457](https://make.fun/badge/best-household-budget-site-20261126-1457.svg)](https://make.fun/bounty/best-household-budget-site-20261126-1457?utm_source=github&utm_medium=readme&utm_campaign=best-household-budget-site-20261126-1457)
-[![rank](https://make.fun/badge/best-household-budget-site-20261126-1457/robbyensoe/dompet-rumah/rank.svg)](https://make.fun/bounty/best-household-budget-site-20261126-1457/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-household-budget-site-20261126-1457)
-[![reward](https://make.fun/badge/best-household-budget-site-20261126-1457/robbyensoe/dompet-rumah/reward.svg)](https://make.fun/bounty/best-household-budget-site-20261126-1457?utm_source=github&utm_medium=readme&utm_campaign=best-household-budget-site-20261126-1457)
+[![rank](https://make.fun/badge/best-household-budget-site-20261126-1457/robbyensoe/dompet-rumah-2/rank.svg)](https://make.fun/bounty/best-household-budget-site-20261126-1457/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-household-budget-site-20261126-1457)
+[![reward](https://make.fun/badge/best-household-budget-site-20261126-1457/robbyensoe/dompet-rumah-2/reward.svg)](https://make.fun/bounty/best-household-budget-site-20261126-1457?utm_source=github&utm_medium=readme&utm_campaign=best-household-budget-site-20261126-1457)
 
 **DompetRumah** — a household budget planner in rupiah, built for make.fun's **best-household-budget-site-20261126-1457** bounty. It follows one worked example end to end — the Prameswari household, a family of four renting in East Jakarta on Rp9.929.876 a month — and every tool on the site actually works:
 
