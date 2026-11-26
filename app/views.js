@@ -1,550 +1,384 @@
-// DompetRumah — the pages. Dashboard, Planner, Goals and Guide, built
-// from data.js through charts.js. The Planner, the expense log and the
-// calculators keep their working state in this module and recompute on
-// every keystroke: every control on the site does what it says.
+// DompetRumah — the four pages as HTML strings. These functions only describe
+// what a page looks like; main.js decides when to call them and wires the controls
+// they return. All figures come from data.js or from the live planner state.
 
-import { ACTUALS, ACTUALS_AS_OF, BENCHMARKS, BILLS, CASHFLOW, CATEGORIES, DAYS_LEFT, EXPENSES, GOALS, GUIDE_RANGES, HOUSEHOLD, WARNING_SIGNS } from './data.js';
-import { actualBars, cashflowChart, donut, esc, progress, rp, rpShort, splitMeter } from './charts.js';
+import {
+  ACTUALS, BENCHMARKS, BILLS, CASHFLOW, CATEGORIES, DONUT_COLORS, GOALS,
+  GROUP_LABELS, GROUP_ORDER, HOUSEHOLD, INCOMES, LEDGER, PRESETS, WARNING_SIGNS,
+} from './data.js';
 
-const incomeOf = (earners) => earners.reduce((a, e) => a + e.amount, 0);
-const totalIncome = incomeOf(HOUSEHOLD.earners);
-const catTotal = CATEGORIES.reduce((a, c) => a + c.amount, 0);
-const groupTotal = (g) => CATEGORIES.filter((c) => c.group === g).reduce((a, c) => a + c.amount, 0);
-const GROUP_NAMES = { needs: 'Needs', wants: 'Wants', future: 'Future' };
-const catName = (id) => (CATEGORIES.find((c) => c.id === id) || { name: id }).name;
-
-// The expense tracker's working copy: starts as the household's actuals
-// and the expenses they have written down, and grows while you use it.
-const actuals = Object.fromEntries(ACTUALS.map((a) => [a.id, a.spent]));
-const expenses = EXPENSES.map((e) => ({ ...e }));
-
-/* ---------------- Dashboard ---------------- */
-
-function actualsSummary() {
-  const spent = Object.values(actuals).reduce((a, v) => a + v, 0);
-  const over = CATEGORIES.filter((c) => actuals[c.id] > c.amount);
-  return { spent, left: totalIncome - spent, over };
+export function fmt(n) {
+  return 'Rp' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
-function actualsBody() {
-  const s = actualsSummary();
-  const rows = CATEGORIES.map((c) => ({ name: c.name, budget: c.amount, spent: actuals[c.id] || 0 }));
-  const log = expenses
-    .map(
-      (e) => `<li><span class="exp-date">${esc(e.date)}</span><span class="exp-note">${esc(e.note)}</span><span class="exp-cat">${esc(catName(e.category))}</span><b>${rp(e.amount)}</b></li>`,
-    )
-    .join('');
-  return `
-  <div class="actuals-summary">
-    <div class="sum-cell"><span>Spent so far</span><b>${rp(s.spent)}</b></div>
-    <div class="sum-cell ${s.left < 0 ? 'bad' : 'good'}"><span>${s.left < 0 ? 'Over the month' : 'Still unspent'}</span><b>${rp(Math.abs(s.left))}</b></div>
-    <div class="sum-cell"><span>Lines over budget</span><b>${s.over.length} of ${CATEGORIES.length}</b></div>
-  </div>
-  ${actualBars(rows)}
-  <p class="note" id="actuals-note">${s.over.length
-    ? `${s.over.map((c) => `${esc(c.name)} is over by ${rp(actuals[c.id] - c.amount)}`).join(' and ')}. The money has to come from somewhere — groceries still hold ${rp(CATEGORIES.find((c) => c.id === 'groceries').amount - actuals.groceries)}.`
-    : 'Every line is still inside its budget.'}
-  ${DAYS_LEFT} days left in the month. Log an expense below and this panel updates at once.</p>
-  <h3 class="subhead">Log an expense</h3>
-  <form class="expense-form" id="expense-form">
-    <label class="ctl">Category
-      <select id="exp-cat">${CATEGORIES.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label>
-    <label class="ctl">Amount (Rp)
-      <input type="number" min="1" step="1000" id="exp-amt" placeholder="50000" required></label>
-    <label class="ctl grow">What was it?
-      <input type="text" id="exp-note" placeholder="e.g. Pasar: beras dan ayam" maxlength="80" required></label>
-    <button type="submit" class="btn">Catat</button>
-  </form>
-  <p class="form-msg" id="exp-msg" role="status"></p>
-  <h3 class="subhead">Recently written down</h3>
-  <ul class="expense-log" id="expense-log">${log}</ul>
-  <p class="more"><button type="button" class="linkbtn" id="actuals-reset">Back to the household's example figures</button></p>`;
-}
-
-export function dashboardPage() {
-  const future = groupTotal('future');
-  const billsPaid = BILLS.filter((b) => b.paid);
-  const donutParts = CATEGORIES.map((c) => ({ name: c.name, value: c.amount }));
-  const goalCards = GOALS.map(
-    (g) => `<article class="goal-mini">
-  <div class="goal-name">${esc(g.name)}</div>
-  ${progress(g.saved, g.target)}
-</article>`,
-  ).join('');
-  const billRows = BILLS.map(
-    (b, i) => `<li class="bill">
-  <label><input type="checkbox" data-bill="${i}" ${b.paid ? 'checked' : ''}>
-  <span class="bill-name">${esc(b.name)}</span></label>
-  <span class="bill-due">due ${esc(b.due)}</span>
-  <span class="bill-amt">${rp(b.amount)}</span>
-</li>`,
-  ).join('');
-  return `
-<section class="hero">
-  <p class="eyebrow">Household budget · Jakarta</p>
-  <h1>${esc(HOUSEHOLD.name)}</h1>
-  <p class="lede">${esc(HOUSEHOLD.members)}. Two incomes, eleven budget lines, one rule:
-  savings move out on payday, before anything else is spent. This is their month, in full.</p>
-</section>
-<section class="kpi-grid">
-  <article class="kpi"><div class="kpi-label">Money in</div>
-    <div class="kpi-value">${rp(totalIncome)}</div>
-    <div class="kpi-note">${HOUSEHOLD.earners.map((e) => `${esc(e.who.split('—')[0].trim())} ${rpShort(e.amount)}`).join(' · ')}</div></article>
-  <article class="kpi"><div class="kpi-label">Planned spending</div>
-    <div class="kpi-value">${rp(catTotal - future)}</div>
-    <div class="kpi-note">Needs ${rpShort(groupTotal('needs'))} · wants ${rpShort(groupTotal('wants'))}</div></article>
-  <article class="kpi"><div class="kpi-label">Toward the future</div>
-    <div class="kpi-value">${((future / totalIncome) * 100).toFixed(1)}%</div>
-    <div class="kpi-note">${rp(future)} to savings and the cicilan, every month</div></article>
-  <article class="kpi"><div class="kpi-label">Left unassigned</div>
-    <div class="kpi-value">${rp(totalIncome - catTotal)}</div>
-    <div class="kpi-note">Every rupiah has a job — the plan balances exactly</div></article>
-</section>
-<div class="cols">
-  <section class="panel">
-    <header class="panel-head"><h2>Where the money goes</h2><span class="src">The monthly plan</span></header>
-    ${donut(donutParts, rpShort(totalIncome), 'per month')}
-    ${splitMeter(groupTotal('needs'), groupTotal('wants'), future)}
-    <p class="note">Needs run to 76% — far above the 50% rule of thumb. That is Jakarta, not
-    carelessness: BPS puts average spending at Rp1.57 million per person, so four people
-    need about Rp6.28 million before a single rupiah is saved.</p>
-  </section>
-  <section class="panel">
-    <header class="panel-head"><h2>This month's bills</h2><span class="src" id="bill-count"></span></header>
-    <ul class="bills">${billRows}</ul>
-    <p class="note" id="bill-note"></p>
-    <h3 class="subhead">Savings goals</h3>
-    <div class="goal-minis">${goalCards}</div>
-    <p class="more"><a href="#/goals">The goals, with calculators &rarr;</a></p>
-  </section>
-</div>
-<section class="panel" id="actuals-panel">
-  <header class="panel-head"><h2>Spent so far vs the budget</h2><span class="src">As of ${esc(ACTUALS_AS_OF)}</span></header>
-  <div id="actuals-body">${actualsBody()}</div>
-</section>
-<section class="panel">
-  <header class="panel-head"><h2>Six months of cash flow</h2><span class="src">July – December 2026</span></header>
-  ${cashflowChart(CASHFLOW)}
-  <p class="note">December's bonus lands in income and the holiday lands in spending. Across the
-  six months the household kept Rp1.359.380 — the emergency fund growing quietly in the background.</p>
-</section>
-<p class="fineprint">DompetRumah is a worked example with real arithmetic: change any figure in the
-<a href="#/planner">Planner</a> and the whole plan rebalances. Benchmarks in the <a href="#/guide">Guide</a>
-are BPS figures, so you can judge this household against the country.</p>`;
-}
-
-export function mountDashboard() {
-  const boxes = document.querySelectorAll('[data-bill]');
-  const count = document.getElementById('bill-count');
-  const note = document.getElementById('bill-note');
-  if (boxes.length && count && note) {
-    const apply = () => {
-      let paid = 0;
-      let paidAmt = 0;
-      let dueAmt = 0;
-      boxes.forEach((box) => {
-        const bill = BILLS[Number(box.dataset.bill)];
-        if (box.checked) { paid += 1; paidAmt += bill.amount; } else { dueAmt += bill.amount; }
-        box.closest('.bill').classList.toggle('is-paid', box.checked);
-      });
-      count.textContent = `${paid} of ${BILLS.length} paid`;
-      note.textContent = paid === BILLS.length
-        ? `All ${BILLS.length} bills settled: ${rp(paidAmt)} out the door.`
-        : `${rp(paidAmt)} settled so far; ${rp(dueAmt)} still to go out this month. Tick a bill as you pay it.`;
-    };
-    boxes.forEach((box) => box.addEventListener('change', apply));
-    apply();
+export function fmtShort(n) {
+  if (n >= 1000000) {
+    const jt = n / 1000000;
+    return 'Rp' + (Number.isInteger(jt) ? jt : jt.toFixed(2).replace(/0$/, '')) + ' jt';
   }
-  const body = document.getElementById('actuals-body');
-  if (!body) return;
-  const redraw = () => { body.innerHTML = actualsBody(); wireActuals(); };
-  const wireActuals = () => {
-    const form = document.getElementById('expense-form');
-    if (form) {
-      form.addEventListener('submit', (ev) => {
-        ev.preventDefault();
-        const cat = document.getElementById('exp-cat').value;
-        const amt = Math.floor(Number(document.getElementById('exp-amt').value) || 0);
-        const noteText = document.getElementById('exp-note').value.trim();
-        const msg = document.getElementById('exp-msg');
-        if (amt <= 0 || !noteText) {
-          if (msg) msg.textContent = 'Fill in an amount above zero and say what it was.';
-          return;
-        }
-        actuals[cat] = (actuals[cat] || 0) + amt;
-        expenses.unshift({ date: 'Today', category: cat, note: noteText, amount: amt });
-        redraw();
-        const fresh = document.getElementById('exp-msg');
-        if (fresh) fresh.textContent = `${rp(amt)} added to ${catName(cat)} — the bars above moved.`;
-      });
-    }
-    const reset = document.getElementById('actuals-reset');
-    if (reset) {
-      reset.addEventListener('click', () => {
-        ACTUALS.forEach((a) => { actuals[a.id] = a.spent; });
-        expenses.length = 0;
-        EXPENSES.forEach((e) => expenses.push({ ...e }));
-        redraw();
-      });
-    }
-  };
-  wireActuals();
+  return 'Rp' + Math.round(n / 1000) + ' rb';
 }
 
-/* ---------------- Planner ---------------- */
-
-// The planner's working state: starts as the sample household, editable.
-const planner = {
-  earners: HOUSEHOLD.earners.map((e) => e.amount),
-  amounts: Object.fromEntries(CATEGORIES.map((c) => [c.id, c.amount])),
-};
-
-const PRESETS = {
-  family: {
-    label: 'Family of four · Jakarta',
-    earners: [5729876, 4200000],
-    amounts: Object.fromEntries(CATEGORIES.map((c) => [c.id, c.amount])),
-  },
-  single: {
-    label: 'Single · Jakarta minimum wage',
-    earners: [5729876, 0],
-    amounts: { rent: 1500000, groceries: 1100000, transport: 450000, utilities: 450000, education: 150000, health: 175000, parents: 300000, eatingout: 400000, extras: 250000, savings: 700000, cicilan: 254876 },
-  },
-  smallcity: {
-    label: 'Family of four · smaller city',
-    earners: [3200000, 1600000],
-    amounts: { rent: 800000, groceries: 1600000, transport: 350000, utilities: 400000, education: 300000, health: 250000, parents: 200000, eatingout: 200000, extras: 100000, savings: 400000, cicilan: 200000 },
-  },
-};
-
-export function plannerPage() {
-  const earnerInputs = HOUSEHOLD.earners
-    .map(
-      (e, i) => `<label class="ctl grow">${esc(e.who)}
-  <input type="number" min="0" step="1000" id="earn-${i}" value="${planner.earners[i]}">
-  <span class="ctl-note">${esc(e.note)}</span></label>`,
-    )
-    .join('');
-  const rows = CATEGORIES.map(
-    (c) => `<tr data-cat="${c.id}">
-  <td class="cat-name">${esc(c.name)}<span class="chip ${c.group}">${GROUP_NAMES[c.group]}</span>
-    <div class="cat-note">${esc(c.note)}</div></td>
-  <td><input type="number" min="0" step="10000" id="amt-${c.id}" value="${planner.amounts[c.id]}" aria-label="Amount for ${esc(c.name)}"></td>
-  <td class="num" id="pct-${c.id}"></td>
-  <td id="guide-${c.id}"></td>
-</tr>`,
-  ).join('');
-  return `
-<section class="page-head">
-  <p class="eyebrow">Planner</p>
-  <h1>Build the month, rupiah by rupiah</h1>
-  <p class="lede">Change any income or budget line and the plan rebalances as you type:
-  shares, guide ranges and what is left. Start from a preset, then make it yours.</p>
-</section>
-<section class="panel">
-  <header class="panel-head"><h2>Start from a preset</h2></header>
-  <div class="presets">${Object.entries(PRESETS)
-    .map(([key, p]) => `<button type="button" class="preset" data-preset="${key}">${esc(p.label)}</button>`)
-    .join('')}</div>
-  <div class="controls wrap">${earnerInputs}</div>
-  <div class="summary" id="planner-summary"></div>
-  <p class="warn" id="planner-warn" role="status"></p>
-  <div class="plan-actions">
-    <button type="button" class="btn" id="copy-plan">Copy the plan as text</button>
-    <button type="button" class="btn ghost" id="reset-plan">Back to the example household</button>
-    <span class="form-msg" id="copy-msg" role="status"></span>
-  </div>
-</section>
-<section class="panel">
-  <header class="panel-head"><h2>The budget lines</h2><span class="src">Guide = a healthy share of income</span></header>
-  <div class="table-wrap"><table class="plan-table">
-    <thead><tr><th>Category</th><th>Amount (Rp)</th><th class="num">Share</th><th>Against guide</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>
-  <p class="note">“Above guide” is not a scolding — Jakarta rent and food sit above the textbook
-  ranges for most families. It is a flag for where a change would free the most money.</p>
-</section>`;
+export function pct(part, whole) {
+  if (!whole) return '0%';
+  return ((part / whole) * 100).toFixed(1).replace(/\.0$/, '') + '%';
 }
 
-function plannerSummary() {
-  const income = incomeOf(planner.earners.map((amount) => ({ amount })));
-  const planned = CATEGORIES.reduce((a, c) => a + (planner.amounts[c.id] || 0), 0);
-  const left = income - planned;
-  const g = (name) =>
-    CATEGORIES.filter((c) => c.group === name).reduce((a, c) => a + (planner.amounts[c.id] || 0), 0);
-  const savingsRate = income > 0 ? (g('future') / income) * 100 : 0;
-  return { income, planned, left, needs: g('needs'), wants: g('wants'), future: g('future'), savingsRate };
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-export function mountPlanner() {
-  const summary = document.getElementById('planner-summary');
-  if (!summary) return;
-  const warn = document.getElementById('planner-warn');
-  const clamp = (input) => {
-    const v = Number(input.value);
-    if (Number.isNaN(v) || v < 0) { input.value = 0; return 0; }
-    return Math.floor(v);
-  };
-  const refresh = () => {
-    const s = plannerSummary();
-    summary.innerHTML = `
-  <div class="sum-cell"><span>Money in</span><b>${rp(s.income)}</b></div>
-  <div class="sum-cell"><span>Planned</span><b>${rp(s.planned)}</b></div>
-  <div class="sum-cell ${s.left < 0 ? 'bad' : 'good'}"><span>${s.left < 0 ? 'Over budget' : 'Left to assign'}</span><b>${rp(Math.abs(s.left))}</b></div>
-  <div class="sum-cell"><span>Toward the future</span><b>${s.savingsRate.toFixed(1)}%</b></div>
-  <div class="sum-split">${splitMeter(s.needs, s.wants, s.future)}</div>`;
-    for (const c of CATEGORIES) {
-      const amt = planner.amounts[c.id] || 0;
-      const pct = s.income > 0 ? (amt / s.income) * 100 : 0;
-      const pctCell = document.getElementById(`pct-${c.id}`);
-      const guideCell = document.getElementById(`guide-${c.id}`);
-      if (pctCell) pctCell.textContent = `${pct.toFixed(1)}%`;
-      if (guideCell) {
-        const [lo, hi] = c.guide;
-        const state = pct < lo ? 'below' : pct > hi ? 'above' : 'within';
-        guideCell.innerHTML = `<span class="guide ${state}">${state === 'within' ? 'Within' : state === 'above' ? 'Above' : 'Below'} guide ${lo}–${hi}%</span>`;
-      }
-    }
-    if (warn) {
-      const hogs = CATEGORIES.filter((c) => s.income > 0 && (planner.amounts[c.id] || 0) / s.income > 0.5);
-      warn.textContent = s.income <= 0
-        ? 'Income is zero, so shares cannot be worked out. Put in at least one income first.'
-        : hogs.length
-          ? `${hogs.map((c) => c.name).join(' and ')} take${hogs.length > 1 ? '' : 's'} more than half the income on ${hogs.length > 1 ? 'their own' : 'its own'} — no household survives that for long.`
-          : s.left < 0
-            ? `The plan spends ${rp(-s.left)} more than the money coming in. Trim a line or raise an income before the month starts.`
-            : '';
-    }
-  };
-  HOUSEHOLD.earners.forEach((_, i) => {
-    const input = document.getElementById(`earn-${i}`);
-    if (input) input.addEventListener('input', () => { planner.earners[i] = clamp(input); refresh(); });
-  });
-  for (const c of CATEGORIES) {
-    const input = document.getElementById(`amt-${c.id}`);
-    if (input) input.addEventListener('input', () => { planner.amounts[c.id] = clamp(input); refresh(); });
-  }
-  document.querySelectorAll('[data-preset]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const preset = PRESETS[btn.dataset.preset];
-      planner.earners = [...preset.earners];
-      planner.amounts = { ...preset.amounts };
-      planner.earners.forEach((v, i) => { const el = document.getElementById(`earn-${i}`); if (el) el.value = v; });
-      for (const c of CATEGORIES) { const el = document.getElementById(`amt-${c.id}`); if (el) el.value = planner.amounts[c.id]; }
-      refresh();
-    });
-  });
-  const copyBtn = document.getElementById('copy-plan');
-  const copyMsg = document.getElementById('copy-msg');
-  if (copyBtn) {
-    copyBtn.addEventListener('click', async () => {
-      const s = plannerSummary();
-      const lines = [
-        'DompetRumah — my monthly plan',
-        `Money in: ${rp(s.income)} · Planned: ${rp(s.planned)} · Left to assign: ${rp(s.left)}`,
-        ...CATEGORIES.map((c) => `${c.name}: ${rp(planner.amounts[c.id] || 0)}`),
-        `Needs ${((s.needs / s.income) * 100 || 0).toFixed(0)}% · wants ${((s.wants / s.income) * 100 || 0).toFixed(0)}% · future ${s.savingsRate.toFixed(1)}%`,
-      ];
-      const text = lines.join('\n');
-      let done = false;
-      try {
-        await navigator.clipboard.writeText(text);
-        done = true;
-      } catch {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        try { done = document.execCommand('copy'); } catch { done = false; }
-        ta.remove();
-      }
-      if (copyMsg) copyMsg.textContent = done ? 'Plan copied — paste it anywhere.' : 'Copy did not work in this browser; the plan is still on screen.';
-    });
-  }
-  const resetBtn = document.getElementById('reset-plan');
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      planner.earners = HOUSEHOLD.earners.map((e) => e.amount);
-      planner.amounts = Object.fromEntries(CATEGORIES.map((c) => [c.id, c.amount]));
-      planner.earners.forEach((v, i) => { const el = document.getElementById(`earn-${i}`); if (el) el.value = v; });
-      for (const c of CATEGORIES) { const el = document.getElementById(`amt-${c.id}`); if (el) el.value = planner.amounts[c.id]; }
-      refresh();
-    });
-  }
-  refresh();
+function totalIncome(state) {
+  return state.incomes.reduce((sum, inc) => sum + inc.amount, 0);
 }
 
-/* ---------------- Goals ---------------- */
+function totalPlanned(state) {
+  return CATEGORIES.reduce((sum, cat) => sum + (state.amounts[cat.id] || 0), 0);
+}
 
-export function goalsPage() {
-  const cards = GOALS.map((g, i) => {
-    const left = g.target - g.saved;
-    const months = Math.ceil(left / g.monthly);
-    return `<article class="goal-card">
-  <div class="goal-name">${esc(g.name)}</div>
-  ${progress(g.saved, g.target)}
-  <p>${esc(g.note)}</p>
-  <div class="goal-next" id="goal-next-${i}">${rp(left)} to go · at ${rp(g.monthly)} a month, done in about <b>${months} months</b></div>
-  <label class="ctl goal-extra">Add extra each month (Rp)
-    <input type="number" min="0" step="50000" value="0" data-goal="${i}" aria-label="Extra monthly saving for ${esc(g.name)}"></label>
-</article>`;
+export function groupTotals(state) {
+  const out = { needs: 0, wants: 0, future: 0 };
+  for (const cat of CATEGORIES) out[cat.group] += state.amounts[cat.id] || 0;
+  return out;
+}
+
+function splitMeter(state) {
+  const income = totalIncome(state);
+  const groups = groupTotals(state);
+  const rows = GROUP_ORDER.map((g) => {
+    const share = income ? (groups[g] / income) * 100 : 0;
+    return `<div class="meter-seg meter-${g}" style="width:${share.toFixed(2)}%">` +
+      (share >= 20 ? `<span>${GROUP_LABELS[g]} ${share.toFixed(0)}%</span>` : '') + '</div>';
   }).join('');
-  return `
-<section class="page-head">
-  <p class="eyebrow">Goals</p>
-  <h1>What the savings are for</h1>
-  <p class="lede">A budget holds when the savings have names. These are the Prameswari
-  household's four — and below, the two calculators they used to size them. Try adding
-  extra to a goal and watch its finish date move closer.</p>
-</section>
-<section class="goal-grid">${cards}</section>
-<div class="cols">
-  <section class="panel">
-    <header class="panel-head"><h2>Emergency fund calculator</h2></header>
-    <div class="controls stack">
-      <label class="ctl grow">Monthly spending (Rp)
-        <input type="number" min="0" step="10000" id="ef-spend" value="9930000"></label>
-      <label class="ctl grow">Months of cover
-        <select id="ef-months">
-          <option value="3" selected>3 months — the starter fund</option>
-          <option value="6">6 months — one income is freelance</option>
-          <option value="9">9 months</option>
-          <option value="12">12 months — the full cushion</option>
-        </select></label>
-      <label class="ctl grow">You can save each month (Rp)
-        <input type="number" min="0" step="10000" id="ef-save" value="1000000"></label>
+  const caption = GROUP_ORDER.map((g) => `${GROUP_LABELS[g]} ${pct(groups[g], income)}`).join(' · ');
+  return `<div class="meter" role="img" aria-label="${esc(caption)}">${rows}</div>
+    <p class="meter-caption">${esc(caption)} of income. The marks show the classic 50 / 30 / 20 rule: needs 50%, wants 30%, future 20%.</p>`;
+}
+
+function pageHead(kicker, title, intro) {
+  return `<p class="kicker">${esc(kicker)}</p><h1>${esc(title)}</h1><p class="lede">${esc(intro)}</p>`;
+}
+
+// ---------------------------------------------------------------- dashboard
+
+function dashboardKpis(state) {
+  const income = totalIncome(state);
+  const planned = totalPlanned(state);
+  const groups = groupTotals(state);
+  const futureShare = pct(groups.future, income);
+  const left = income - planned;
+  return `<section class="kpis" aria-label="Month at a glance">
+    <div class="kpi"><p class="kpi-label">Money in</p><p class="kpi-big">${fmt(income)}</p>
+      <p class="kpi-sub"><span class="nowrap">Earner 1 ${fmtShort(INCOMES[0].amount)}</span> · <span class="nowrap">Earner 2 ${fmtShort(INCOMES[1].amount)}</span></p></div>
+    <div class="kpi"><p class="kpi-label">Planned spending</p><p class="kpi-big">${fmt(planned)}</p>
+      <p class="kpi-sub"><span class="nowrap">Needs ${fmtShort(groups.needs)}</span> · <span class="nowrap">wants ${fmtShort(groups.wants)}</span></p></div>
+    <div class="kpi"><p class="kpi-label">Toward the future</p><p class="kpi-big">${futureShare}</p>
+      <p class="kpi-sub">${fmt(groups.future)} to savings and the cicilan, every month</p></div>
+    <div class="kpi"><p class="kpi-label">Left unassigned</p><p class="kpi-big">${fmt(left)}</p>
+      <p class="kpi-sub">${left === 0 ? 'Every rupiah has a job — the plan balances exactly' : 'Assign it a job in the Planner before the month starts'}</p></div>
+  </section>`;
+}
+
+function dashboardDonut(state) {
+  const slices = CATEGORIES.map((cat, i) => ({
+    label: cat.name, value: state.amounts[cat.id] || 0, color: DONUT_COLORS[i % DONUT_COLORS.length],
+  }));
+  const legend = slices.map((s) => `<li><span class="dot" style="background:${s.color}"></span>
+    <span class="legend-name">${esc(s.label)}</span><span class="legend-amount">${fmtShort(s.value)}</span></li>`).join('');
+  return `<section class="card" aria-label="Where the money goes">
+    <h2>Where the money goes</h2><p class="card-note">The monthly plan</p>
+    <div class="donut-wrap"><canvas id="donut" width="260" height="260" aria-label="Donut chart of the eleven budget lines"></canvas>
+    <ul class="legend">${legend}</ul></div></section>`;
+}
+
+function dashboardBills(state) {
+  const paid = state.bills.filter((b) => b.paid).length;
+  const rows = state.bills.map((b) => `<li class="${b.paid ? 'paid' : ''}">
+    <label><input type="checkbox" data-bill="${b.id}" ${b.paid ? 'checked' : ''}>
+    <span class="bill-name">${esc(b.name)}</span></label>
+    <span class="bill-due">${esc(b.due)}</span><span class="bill-amount">${fmt(b.amount)}</span></li>`).join('');
+  const total = BILLS.reduce((sum, b) => sum + b.amount, 0);
+  return `<section class="card" aria-label="This month's bills">
+    <h2>This month's bills</h2><p class="card-note"><span id="bill-count">${paid} of ${state.bills.length} paid</span> · ${fmt(total)} in all</p>
+    <ul class="bills">${rows}</ul>
+    <p class="card-foot">Tick a bill when it is paid. The counter above moves with you.</p></section>`;
+}
+
+function dashboardGoals(state) {
+  const cards = GOALS.map((g) => {
+    const share = Math.min(100, Math.round((g.saved / g.target) * 100));
+    return `<li><div class="goal-mini-head"><span>${esc(g.name)}</span><strong>${share}%</strong></div>
+      <div class="bar"><span style="width:${share}%"></span></div>
+      <p class="goal-mini-sub">${fmt(g.saved)} of ${fmt(g.target)}</p></li>`;
+  }).join('');
+  return `<section class="card" aria-label="Savings goals">
+    <h2>What the savings are for</h2><p class="card-note">Four goals, one household</p>
+    <ul class="goal-minis">${cards}</ul>
+    <p class="card-foot"><a href="#/goals">Open the Goals page to add extra and move the finish dates →</a></p></section>`;
+}
+
+function dashboardFlow() {
+  return `<section class="card" aria-label="Cash flow">
+    <h2>Money in, money out</h2><p class="card-note">July – December 2026 · green is income, amber is spending</p>
+    <canvas id="cashflow" height="220" aria-label="Bar chart of monthly income and spending"></canvas>
+    <p class="card-foot">December jumps on the year-end bonus — and on holiday spending. September's extra income was a big freelance month.</p></section>`;
+}
+
+function dashboardSpent(state) {
+  const rows = CATEGORIES.map((cat) => {
+    const plan = state.amounts[cat.id] || 0;
+    const spent = ACTUALS[cat.id] || 0;
+    const over = spent - plan;
+    const fill = plan > 0 ? Math.min(100, (spent / plan) * 100) : 0;
+    const status = over > 0
+      ? `<span class="over">over by ${fmt(over)}</span>`
+      : `<span class="left">${fmt(plan - spent)} left</span>`;
+    return `<li><span class="spent-name">${esc(cat.name)}</span>
+      <span class="spent-bar"><span style="width:${fill}%"></span></span>
+      <span class="spent-nums">${fmt(spent)} / ${fmt(plan)}</span>${status}</li>`;
+  }).join('');
+  const spentTotal = Object.values(ACTUALS).reduce((a, b) => a + b, 0);
+  const income = totalIncome(state);
+  return `<section class="card wide" aria-label="Spent versus planned">
+    <h2>Spent vs planned — ${esc(HOUSEHOLD.monthLabel)}</h2>
+    <p class="card-note">As of ${esc(HOUSEHOLD.asOf)} · ${HOUSEHOLD.daysLeft} days left in the month</p>
+    <ul class="spent">${rows}</ul>
+    <p class="spent-total">Spent so far <strong>${fmt(spentTotal)}</strong> · still in hand <strong>${fmt(income - spentTotal)}</strong></p></section>`;
+}
+
+function dashboardLedger(state) {
+  const options = CATEGORIES.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  const entries = state.ledger.map((e) => {
+    const cat = CATEGORIES.find((c) => c.id === e.category);
+    return `<li><span class="ledger-date">${esc(e.date)}</span><span class="ledger-cat">${esc(cat ? cat.name : e.category)}</span>
+      <span class="ledger-note">${esc(e.note)}</span><span class="ledger-amount">${fmt(e.amount)}</span></li>`;
+  }).join('');
+  return `<section class="card wide" aria-label="Recent spending">
+    <h2>Recent spending</h2><p class="card-note">Newest first — write it down the day it happens</p>
+    <form id="expense-form" class="expense-form">
+      <label>Category<select name="category" required>${options}</select></label>
+      <label>What was it?<input name="note" type="text" required maxlength="80" placeholder="e.g. Pasar: beras 5 kg"></label>
+      <label>Amount (Rp)<input name="amount" type="number" min="1" required placeholder="185000"></label>
+      <button type="submit">Add expense</button>
+    </form>
+    <ul class="ledger">${entries}</ul></section>`;
+}
+
+export function renderDashboard(state) {
+  return pageHead(
+    'Household budget · Jakarta',
+    `The ${HOUSEHOLD.name} household`,
+    `${HOUSEHOLD.members} · ${HOUSEHOLD.home}. Two incomes, eleven budget lines, one rule: savings move out on payday, before anything else is spent. This is their month, in full.`,
+  ) + dashboardKpis(state) +
+    `<div class="two-col">${dashboardDonut(state)}${dashboardBills(state)}</div>` +
+    `<div class="two-col">${dashboardGoals(state)}${dashboardFlow()}</div>` +
+    dashboardSpent(state) + dashboardLedger(state);
+}
+
+// ---------------------------------------------------------------- planner
+
+function plannerSummary(state) {
+  const income = totalIncome(state);
+  const planned = totalPlanned(state);
+  const left = income - planned;
+  const groups = groupTotals(state);
+  return `<div class="summary">
+    <div><p class="kpi-label">Money in</p><p class="summary-big">${fmt(income)}</p></div>
+    <div><p class="kpi-label">Planned</p><p class="summary-big">${fmt(planned)}</p></div>
+    <div><p class="kpi-label">Left to assign</p><p class="summary-big ${left < 0 ? 'bad' : ''}">${fmt(left)}</p></div>
+    <div><p class="kpi-label">Toward the future</p><p class="summary-big">${pct(groups.future, income)}</p></div>
+    <div class="summary-meter">${splitMeter(state)}</div>
+  </div>
+  <p id="planner-warning" class="warning" hidden></p>`;
+}
+
+function plannerRows(state) {
+  const income = totalIncome(state);
+  const rows = CATEGORIES.map((cat) => {
+    const amount = state.amounts[cat.id] || 0;
+    const share = income ? (amount / income) * 100 : 0;
+    const inRange = share >= cat.guideLo && share <= cat.guideHi;
+    const flag = inRange
+      ? `<span class="flag ok">within ${cat.guideLo}–${cat.guideHi}%</span>`
+      : `<span class="flag ${share > cat.guideHi ? 'high' : 'low'}">${share.toFixed(1)}% — guide ${cat.guideLo}–${cat.guideHi}%</span>`;
+    const warn = share > 50 ? `<span class="flag high">over half the income</span>` : '';
+    return `<tr>
+      <td><strong>${esc(cat.name)}</strong><br><span class="row-hint">${esc(cat.hint)}</span></td>
+      <td><input type="number" min="0" step="1000" data-cat="${cat.id}" value="${amount}" aria-label="Amount for ${esc(cat.name)}"></td>
+      <td class="num">${share.toFixed(1)}%</td>
+      <td>${flag} ${warn}</td>
+    </tr>`;
+  }).join('');
+  return `<table class="plan-table"><thead><tr>
+    <th>Category</th><th>Amount (Rp)</th><th>Share</th><th>Against guide</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+export function renderPlanner(state) {
+  const presets = PRESETS.map((p) => `<button type="button" class="preset ${state.presetId === p.id ? 'active' : ''}" data-preset="${p.id}">
+    <strong>${esc(p.name)}</strong><span>${esc(p.blurb)}</span></button>`).join('');
+  const incomeFields = state.incomes.map((inc, i) => {
+    const base = INCOMES[i];
+    return `<div><label for="income-${inc.id}">${esc(inc.label)}</label>
+      <input type="number" id="income-${inc.id}" min="0" step="1000" data-income="${inc.id}" value="${inc.amount}">
+      <p class="field-note">${esc(base ? base.note : '')}</p></div>`;
+  }).join('');
+  return pageHead(
+    'Planner',
+    'Build the month, rupiah by rupiah',
+    'Change any income or budget line and the plan rebalances as you type: shares, guide ranges and what is left. Start from a preset, then make it yours.',
+  ) + `<section class="card wide" aria-label="Planner">
+    <h2>Start from a preset</h2><div class="presets">${presets}</div>
+    <div class="income-grid">${incomeFields}</div>
+    ${plannerSummary(state)}
+    <div class="plan-actions">
+      <button type="button" id="copy-plan" class="btn-primary">Copy the plan as text</button>
+      <button type="button" id="reset-plan" class="btn-ghost">Back to the example household</button>
+      <span id="copy-note" class="copy-note" role="status"></span>
     </div>
-    <div class="calc-out" id="ef-out"></div>
-    <p class="note">One income in this house is freelance, so the family aims at six months,
-    not three: about Rp59.6 million at their current spending.</p>
   </section>
-  <section class="panel">
-    <header class="panel-head"><h2>Any goal, monthly</h2></header>
-    <div class="controls stack">
-      <label class="ctl grow">The goal costs (Rp)
-        <input type="number" min="0" step="100000" id="goal-target" value="25000000"></label>
-      <label class="ctl grow">Months from now
-        <input type="number" min="1" step="1" id="goal-months" value="24"></label>
+  <section class="card wide" aria-label="The budget lines">
+    <h2>The budget lines</h2><p class="card-note">Guide = a healthy share of income</p>
+    ${plannerRows(state)}
+  </section>`;
+}
+
+// ---------------------------------------------------------------- goals
+
+function monthsToGo(goal, extra) {
+  const remaining = goal.target - goal.saved;
+  if (remaining <= 0) return 0;
+  return Math.ceil(remaining / Math.max(1, goal.monthly + extra));
+}
+
+function goalCards(state) {
+  return GOALS.map((g) => {
+    const extra = state.goalExtra[g.id] || 0;
+    const share = Math.min(100, Math.round((g.saved / g.target) * 100));
+    const months = monthsToGo(g, extra);
+    return `<article class="card goal-card">
+      <h2>${esc(g.name)}</h2>
+      <div class="bar big"><span style="width:${share}%"></span></div>
+      <p class="goal-amounts">${fmt(g.saved)} of ${fmt(g.target)} — <strong>${share}%</strong></p>
+      <p>${esc(g.note)}</p>
+      <p><strong>${fmt(g.target - g.saved)} to go</strong> · at ${fmt(g.monthly + extra)} a month, done in about <strong>${months} months</strong></p>
+      <label>Add extra each month (Rp)
+        <input type="number" min="0" step="50000" data-goal-extra="${g.id}" value="${extra}">
+      </label>
+    </article>`;
+  }).join('');
+}
+
+function emergencyCalculator(state) {
+  const calc = state.emergency;
+  const needed = calc.spend * calc.months;
+  const months = calc.monthly > 0 ? Math.ceil(needed / calc.monthly) : 0;
+  return `<section class="card" aria-label="Emergency fund calculator">
+    <h2>Emergency fund calculator</h2>
+    <p>How much does your household spend in a month? Multiply it by the months of cover you want, then divide by what you can save each month.</p>
+    <label>Monthly spending (Rp)<input type="number" min="0" step="100000" data-calc="spend" value="${calc.spend}"></label>
+    <label>Months of cover<input type="number" min="1" max="12" data-calc="months" value="${calc.months}"></label>
+    <label>Monthly saving (Rp)<input type="number" min="0" step="50000" data-calc="monthly" value="${calc.monthly}"></label>
+    <p class="calc-result">You need <strong>${fmt(needed)}</strong> — at ${fmt(calc.monthly)} a month that takes about <strong>${months} months</strong>.</p>
+  </section>`;
+}
+
+function anyGoalCalculator(state) {
+  const calc = state.anyGoal;
+  const remaining = Math.max(0, calc.target - calc.saved);
+  const months = calc.monthly > 0 ? Math.ceil(remaining / calc.monthly) : 0;
+  const done = new Date(2026, 10 + months, 26);
+  const doneLabel = months === 0 ? 'already there' : done.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  return `<section class="card" aria-label="Any goal calculator">
+    <h2>Any goal calculator</h2>
+    <p>Size any goal of your own — a wedding, a motorbike, a shop deposit.</p>
+    <label>Target (Rp)<input type="number" min="0" step="100000" data-any="target" value="${calc.target}"></label>
+    <label>Saved so far (Rp)<input type="number" min="0" step="100000" data-any="saved" value="${calc.saved}"></label>
+    <label>Monthly saving (Rp)<input type="number" min="0" step="50000" data-any="monthly" value="${calc.monthly}"></label>
+    <p class="calc-result"><strong>${fmt(remaining)} to go</strong> · about <strong>${months} months</strong> · done around <strong>${doneLabel}</strong>.</p>
+  </section>`;
+}
+
+export function renderGoals(state) {
+  return pageHead(
+    'Goals',
+    'What the savings are for',
+    'A budget holds when the savings have names. These are the Prameswari household\u2019s four — and below, the two calculators they used to size them. Try adding extra to a goal and watch its finish date move closer.',
+  ) + `<div class="goal-grid">${goalCards(state)}</div>
+  <div class="two-col">${emergencyCalculator(state)}${anyGoalCalculator(state)}</div>`;
+}
+
+// ---------------------------------------------------------------- guide
+
+function guideRanges() {
+  const rows = CATEGORIES.map((cat) => `<tr>
+    <td><strong>${esc(cat.name)}</strong></td><td>${GROUP_LABELS[cat.group]}</td>
+    <td class="num">${cat.guideLo}–${cat.guideHi}%</td>
+    <td class="num">${fmt(cat.amount)}</td><td class="num">${pct(cat.amount, 9929876)}</td>
+  </tr>`).join('');
+  return `<section class="card wide" aria-label="Healthy ranges">
+    <h2>Healthy ranges, line by line</h2>
+    <p>What share of income each line usually takes in a Jakarta household — and what the Prameswari plan actually gives it.</p>
+    <table class="plan-table"><thead><tr>
+      <th>Category</th><th>Group</th><th>Healthy range</th><th>This plan</th><th>Share</th>
+    </tr></thead><tbody>${rows}</tbody></table></section>`;
+}
+
+function guideVerdict() {
+  return `<section class="card" aria-label="The 50 30 20 verdict">
+    <h2>50 / 30 / 20, honestly</h2>
+    <p>The classic rule says needs 50%, wants 30%, future 20%. The Prameswari plan runs <strong>75,5% needs, 9,4% wants, 15,1% future</strong> — and that is not a failure, it is Jakarta.</p>
+    <p>At the 2026 minimum wage, rent and food alone take 46% of income. A household that forced needs down to 50% would be skipping meals or moving far from work. The honest version of the rule for this city: keep wants small, protect the future line first, and let needs be what they are.</p>
+    <p>The number that matters most is the future line. At 15,1% this household saves more than the 10% floor — and that, more than any ratio, is what keeps a bad month from becoming a bad year.</p>
+  </section>`;
+}
+
+function paydayRoutine() {
+  const steps = [
+    ['Payday, before anything else', 'Move Rp1.000.000 to the separate savings account. The rest of the month is planned on what remains.'],
+    ['Pay the fixed bills', 'Rent, BPJS and SPP go out in the first ten days. Tick them off on the dashboard as they leave.'],
+    ['Fill the kitchen envelope', 'Rp2.400.000 for the month, split into four weekly shops. A week that ends early eats the next week, not the savings.'],
+    ['Write down every spend', 'One line a day, however small. Five minutes at night; the ledger on the dashboard is where it lives.'],
+    ['Sunday check, five minutes', 'Add up the week. If a line is running hot, move money between lines in the Planner — openly, on the page, not in your head.'],
+  ];
+  return `<section class="card" aria-label="Payday routine">
+    <h2>The payday routine, in five steps</h2>
+    <ol class="steps">${steps.map(([title, text]) => `<li><strong>${esc(title)}</strong><br>${esc(text)}</li>`).join('')}</ol>
+  </section>`;
+}
+
+function guideBenchmarks() {
+  const b = BENCHMARKS;
+  return `<section class="card wide" aria-label="Benchmarks">
+    <h2>How this household compares — BPS figures</h2>
+    <div class="bench-grid">
+      <div><p class="bench-big">${fmt(b.perCapita)}</p><p>${esc(b.perCapitaNote)}</p></div>
+      <div><p class="bench-big">${fmt(b.jakartaPerCapita)}</p><p>Jakarta per person — food ${fmt(b.jakartaFood)} of it, ${b.jakartaFoodShare}%</p></div>
+      <div><p class="bench-big">${fmt(b.averageWage)}</p><p>${esc(b.averageWageNote)}</p></div>
+      <div><p class="bench-big">${fmt(b.ump2026)}</p><p>Jakarta UMP 2026, up from ${fmt(b.ump2025)} in 2025</p></div>
+      <div><p class="bench-big">${fmt(b.povertyLine)}</p><p>${esc(b.povertyNote)}</p></div>
+      <div><p class="bench-big">${fmt(9929876 / 4)}</p><p>This household, per person per month — below the Jakarta average, which is what four people sharing one roof buys you</p></div>
     </div>
-    <div class="calc-out" id="goal-out"></div>
-    <p class="note">The honest test of a goal is the monthly figure: if it does not fit the
-    plan, move the date — not the savings line for everything else.</p>
-  </section>
-</div>`;
+    <p class="card-foot">Sources: BPS Susenas March 2025, Sakernas August 2025, Jakarta UMP 2026. At Rp2,48 jt a head this household spends less per person than the Jakarta average — and still ends the month with Rp240.000 in hand.</p>
+  </section>`;
 }
 
-export function mountGoals() {
-  document.querySelectorAll('[data-goal]').forEach((input) => {
-    input.addEventListener('input', () => {
-      const i = Number(input.dataset.goal);
-      const g = GOALS[i];
-      const extra = Math.max(0, Math.floor(Number(input.value) || 0));
-      const left = g.target - g.saved;
-      const per = g.monthly + extra;
-      const months = Math.ceil(left / per);
-      const out = document.getElementById(`goal-next-${i}`);
-      if (out) {
-        out.innerHTML = `${rp(left)} to go · at ${rp(per)} a month${extra > 0 ? ` (including ${rp(extra)} extra)` : ''}, done in about <b>${months} months</b>`;
-      }
-    });
-  });
-  const efOut = document.getElementById('ef-out');
-  if (efOut) {
-    const spend = document.getElementById('ef-spend');
-    const months = document.getElementById('ef-months');
-    const save = document.getElementById('ef-save');
-    const apply = () => {
-      const target = (Number(spend.value) || 0) * Number(months.value);
-      const per = Number(save.value) || 0;
-      const eta = per > 0 ? Math.ceil(target / per) : null;
-      efOut.innerHTML = `Your emergency fund target is <b>${rp(target)}</b>.` +
-        (eta ? ` Saving ${rp(per)} a month, you are covered in <b>${eta} months</b>.` : ' Set a monthly saving above zero to see the date.');
-    };
-    [spend, months, save].forEach((el) => el && el.addEventListener('input', apply));
-    apply();
-  }
-  const goalOut = document.getElementById('goal-out');
-  if (goalOut) {
-    const target = document.getElementById('goal-target');
-    const months = document.getElementById('goal-months');
-    const apply = () => {
-      const t = Number(target.value) || 0;
-      const m = Math.max(1, Number(months.value) || 1);
-      const per = t / m;
-      goalOut.innerHTML = `Put by <b>${rp(Math.ceil(per))} a month</b> — about ${rp(Math.ceil(per / 30))} a day — and the ${rp(t)} is there in ${m} months.`;
-    };
-    [target, months].forEach((el) => el && el.addEventListener('input', apply));
-    apply();
-  }
+function guideWarnings() {
+  const cards = WARNING_SIGNS.map((w, i) => `<article class="card warn-card">
+    <p class="warn-num">${i + 1}</p><h3>${esc(w.title)}</h3>
+    <p><strong>Why it matters:</strong> ${esc(w.why)}</p>
+    <p><strong>What to do:</strong> ${esc(w.fix)}</p></article>`).join('');
+  return `<section aria-label="Warning signs">
+    <h2>Five signs a budget is in trouble</h2>
+    <p class="lede">Any one of these is a warning. Two at once means the plan needs rewriting this week, not next month.</p>
+    <div class="warn-grid">${cards}</div></section>`;
 }
 
-/* ---------------- Guide ---------------- */
-
-export function guidePage() {
-  const bench = BENCHMARKS.map(
-    (b) => `<article class="fact">
-  <div class="fact-value">${esc(b.value)}</div>
-  <div class="fact-label">${esc(b.label)}</div>
-  <p>${esc(b.note)}</p>
-  <div class="src">${esc(b.source)}</div>
-</article>`,
-  ).join('');
-  const ranges = GUIDE_RANGES.map(
-    (g) => `<tr><td class="cat-name">${esc(g.name)}</td><td class="num range">${esc(g.range)}</td><td>${esc(g.tip)}</td></tr>`,
-  ).join('');
-  const signs = WARNING_SIGNS.map(
-    (w) => `<li><b>${esc(w.sign)}</b><span>${esc(w.why)}</span></li>`,
-  ).join('');
-  return `
-<section class="page-head">
-  <p class="eyebrow">Guide</p>
-  <h1>What a healthy budget looks like here</h1>
-  <p class="lede">Rules of thumb travel badly. These are the ranges that fit Indonesian
-  households, checked against what BPS measures the country actually spends.</p>
-</section>
-<section class="fact-grid">${bench}</section>
-<section class="panel">
-  <header class="panel-head"><h2>The 50 / 30 / 20 rule, honestly</h2></header>
-  <p>The classic rule gives 50% of income to needs, 30% to wants and 20% to savings and debt.
-  In Jakarta it fails on contact: BPS counts average spending at Rp1.57 million per person a month,
-  and rent for a family home starts near Rp2 million. The Prameswari plan runs 76 / 9 / 15 —
-  needs heavy, wants lean, future protected. Treat the rule as a compass, not a verdict:
-  what matters is that the future line is paid first and never raided quietly.</p>
-  ${splitMeter(groupTotal('needs'), groupTotal('wants'), groupTotal('future'))}
-</section>
-<section class="panel">
-  <header class="panel-head"><h2>Healthy ranges, category by category</h2><span class="src">Share of take-home income</span></header>
-  <div class="table-wrap"><table class="plan-table">
-    <thead><tr><th>Category</th><th class="num">Range</th><th>What to know</th></tr></thead>
-    <tbody>${ranges}</tbody>
-  </table></div>
-</section>
-<section class="panel">
-  <header class="panel-head"><h2>Five signs the budget is quietly failing</h2></header>
-  <ul class="signs">${signs}</ul>
-  <p class="note">One sign is a warning; three together mean the plan needs rewriting, not
-  more willpower. Start with the smallest fix — a weekly grocery cap, or moving savings
-  to payday — and let the record on the dashboard prove it works.</p>
-</section>
-<section class="panel">
-  <header class="panel-head"><h2>The payday routine</h2></header>
-  <ol class="routine">
-    <li><b>Day 1 — pay the future first.</b> Move savings and the emergency-fund line to the separate account before any bill is touched.</li>
-    <li><b>Day 1 — settle the fixed bills.</b> Rent, phone packages and anything due by the 10th (BPJS, school) go out in one sitting; tick them off on the dashboard.</li>
-    <li><b>Weekly — the kitchen envelope.</b> Groceries get a weekly cash or e-wallet cap (here, Rp600.000); when it is gone, the market list shrinks, not the savings.</li>
-    <li><b>Mid-month — a ten-minute check.</b> Compare the plan against the bank balance. A line that is over by the 15th gets trimmed while there is still month left.</li>
-    <li><b>Month-end — sweep and write it down.</b> Whatever is left joins the emergency fund, and the month joins the cash-flow record — six honest months teach more than any rule.</li>
-  </ol>
-</section>
-<p class="fineprint">Benchmarks: BPS Susenas March 2025 and Sakernas August 2025; Jakarta's UMP from the
-Governor's decrees for 2025 and 2026. Ranges are guidance for a renting family in a large city, not financial advice.</p>`;
-}
-
-/* ---------------- Missing ---------------- */
-
-export function missingPage() {
-  return `<section class="page-head">
-  <h1>Not found</h1>
-  <p class="lede">There is no page at this address. <a href="#/">Back to the dashboard</a>.</p>
-</section>`;
+export function renderGuide() {
+  return pageHead(
+    'Guide',
+    'The guide: ranges, routines, reality',
+    'Healthy shares for every line, an honest word on the 50 / 30 / 20 rule, the five-step payday routine, and the national figures this household is measured against.',
+  ) + guideRanges() + `<div class="two-col">${guideVerdict()}${paydayRoutine()}</div>` +
+    guideBenchmarks() + guideWarnings();
 }

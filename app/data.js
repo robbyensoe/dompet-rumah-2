@@ -1,121 +1,226 @@
-// DompetRumah — data. One worked example (a Jakarta family of four) plus
-// the national figures it is judged against. The household's budget is
-// constructed arithmetic: every line below is re-added by the planner and
-// must sum to the household income exactly. Benchmarks are BPS (Statistics
-// Indonesia) numbers with their year attached, so a reader can check them.
+// DompetRumah — the household's numbers, kept apart from the pages that show them.
+// Everything on the site reads from this one module, so a figure is written once
+// and reused on the dashboard, the planner, the goals page and the guide.
 
 export const HOUSEHOLD = {
-  name: 'The Prameswari household',
-  members: '2 adults, 2 children · renting in East Jakarta',
-  earners: [
-    { who: 'Earner 1 — full-time salary', amount: 5729876, note: 'Exactly the Jakarta minimum wage (UMP) for 2026' },
-    { who: 'Earner 2 — online shop & freelance', amount: 4200000, note: 'A typical month; it moves up and down' },
-  ],
+  name: 'Prameswari',
+  members: '2 adults, 2 children',
+  home: 'renting in East Jakarta',
+  monthLabel: 'November 2026',
+  daysLeft: 4,
+  asOf: '26 Nov 2026',
 };
 
-// The monthly plan. group is needs, wants or future; guide is the share of
-// income a household like this usually lands in, as a [low, high] percent.
+export const INCOMES = [
+  {
+    id: 'earner-one',
+    label: 'Earner 1 — full-time salary',
+    note: 'Exactly the Jakarta minimum wage (UMP) for 2026',
+    amount: 5729876,
+  },
+  {
+    id: 'earner-two',
+    label: 'Earner 2 — online shop & freelance',
+    note: 'A typical month; it moves up and down',
+    amount: 4200000,
+  },
+];
+
+// group: needs / wants / future. guideLo / guideHi: healthy share of income, in percent.
 export const CATEGORIES = [
-  { id: 'rent', name: 'Rent (kontrakan)', group: 'needs', amount: 2200000, guide: [18, 28], note: 'Three rooms, East Jakarta, paid on the 1st' },
-  { id: 'groceries', name: 'Groceries & kitchen', group: 'needs', amount: 2400000, guide: [20, 30], note: 'Rice, lauk, vegetables, cooking gas, market and minimarket runs' },
-  { id: 'transport', name: 'Transport', group: 'needs', amount: 800000, guide: [6, 12], note: 'KRL and busway cards, petrol for one motorbike, the odd ojek' },
-  { id: 'utilities', name: 'Electricity, water, internet & pulsa', group: 'needs', amount: 750000, guide: [5, 10], note: 'PLN tokens, PDAM water, home internet, two phone packages' },
-  { id: 'education', name: 'School & courses', group: 'needs', amount: 650000, guide: [4, 10], note: 'School fees, books, and an English course for the elder child' },
-  { id: 'health', name: 'Health & BPJS', group: 'needs', amount: 350000, guide: [3, 6], note: 'BPJS Kesehatan premiums for four, plus a medicine cushion' },
-  { id: 'parents', name: 'Support for parents', group: 'needs', amount: 350000, guide: [0, 8], note: 'A monthly transfer to grandparents in the village' },
-  { id: 'eatingout', name: 'Eating out & fun', group: 'wants', amount: 600000, guide: [3, 8], note: 'Weekend bakso, one family outing, streaming subscriptions' },
-  { id: 'extras', name: 'Shopping & extras', group: 'wants', amount: 330000, guide: [2, 6], note: 'Clothes, toiletries beyond the basics, small repairs' },
-  { id: 'savings', name: 'Savings & emergency fund', group: 'future', amount: 1000000, guide: [10, 20], note: 'Moved out on payday, before anything else is spent' },
-  { id: 'cicilan', name: 'Motorbike installment (cicilan)', group: 'future', amount: 499876, guide: [0, 10], note: '14 payments left on the family motorbike' },
+  { id: 'rent', name: 'Sewa kontrakan', group: 'needs', amount: 2200000, guideLo: 18, guideHi: 28, hint: 'Kontrak tahunan, dibayar tiap tanggal 1' },
+  { id: 'kitchen', name: 'Belanja dapur', group: 'needs', amount: 2400000, guideLo: 20, guideHi: 30, hint: 'Pasar + warung, seminggu sekali belanja besar' },
+  { id: 'transport', name: 'Transport', group: 'needs', amount: 800000, guideLo: 6, guideHi: 12, hint: 'Bensin motor, parkir, sesekali ojek' },
+  { id: 'utilities', name: 'Listrik, air, internet & pulsa', group: 'needs', amount: 750000, guideLo: 5, guideHi: 10, hint: 'Token PLN, PDAM, Wi-Fi rumah, paket HP ×2' },
+  { id: 'school', name: 'Sekolah & kursus', group: 'needs', amount: 650000, guideLo: 4, guideHi: 10, hint: 'SPP dua anak + les sore' },
+  { id: 'health', name: 'Kesehatan & BPJS', group: 'needs', amount: 350000, guideLo: 3, guideHi: 6, hint: 'Iuran BPJS sekeluarga + obat ringan' },
+  { id: 'parents', name: 'Santunan orang tua', group: 'needs', amount: 350000, guideLo: 0, guideHi: 8, hint: 'Dikirim tiap awal bulan, tidak pernah telat' },
+  { id: 'eating-out', name: 'Makan di luar & hiburan', group: 'wants', amount: 600000, guideLo: 3, guideHi: 8, hint: 'Bakso Minggu malam, sesekali nonton' },
+  { id: 'extras', name: 'Belanja & ekstra', group: 'wants', amount: 330000, guideLo: 2, guideHi: 6, hint: 'Pakaian, seragam, yang tidak terduga' },
+  { id: 'savings', name: 'Tabungan & dana darurat', group: 'future', amount: 1000000, guideLo: 10, guideHi: 20, hint: 'Pindah ke rekening terpisah saat gajian' },
+  { id: 'bike', name: 'Cicilan motor', group: 'future', amount: 499876, guideLo: 0, guideHi: 10, hint: 'Sisa cicilan, lunas pertengahan 2027' },
 ];
 
-// What the household has actually spent so far this month, per category,
-// as of 26 November 2026 — four days of the month remain. Two lines are
-// already over their budget; the dashboard says so plainly.
-export const ACTUALS_AS_OF = '26 November 2026';
-export const DAYS_LEFT = 4;
-export const ACTUALS = [
-  { id: 'rent', spent: 2200000 },
-  { id: 'groceries', spent: 2180000 },
-  { id: 'transport', spent: 690000 },
-  { id: 'utilities', spent: 720000 },
-  { id: 'education', spent: 650000 },
-  { id: 'health', spent: 350000 },
-  { id: 'parents', spent: 350000 },
-  { id: 'eatingout', spent: 640000 },
-  { id: 'extras', spent: 410000 },
-  { id: 'savings', spent: 1000000 },
-  { id: 'cicilan', spent: 499876 },
-];
+// What the household has actually spent so far this month, per category.
+export const ACTUALS = {
+  rent: 2200000,
+  kitchen: 2180000,
+  transport: 690000,
+  utilities: 720000,
+  school: 650000,
+  health: 350000,
+  parents: 350000,
+  'eating-out': 640000,
+  extras: 410000,
+  savings: 1000000,
+  bike: 499876,
+};
 
-// The last few expenses the household wrote down, newest first. The
-// "log an expense" form on the dashboard adds to this list while you use it.
-export const EXPENSES = [
-  { date: '25 Nov', category: 'groceries', note: 'Pasar: beras 5 kg, ayam, sayur seminggu', amount: 185000 },
+// The most recent spending entries, newest first.
+export const LEDGER = [
+  { date: '25 Nov', category: 'kitchen', note: 'Pasar: beras 5 kg, ayam, sayur seminggu', amount: 185000 },
   { date: '24 Nov', category: 'transport', note: 'Bensin motor + parkir', amount: 45000 },
-  { date: '23 Nov', category: 'eatingout', note: 'Makan bakso sekeluarga, Minggu malam', amount: 120000 },
+  { date: '23 Nov', category: 'eating-out', note: 'Makan bakso sekeluarga, Minggu malam', amount: 120000 },
   { date: '22 Nov', category: 'extras', note: 'Seragam sekolah anak, satu stel', amount: 150000 },
   { date: '21 Nov', category: 'utilities', note: 'Token PLN 200 ribu', amount: 200000 },
 ];
 
-// Six months of the household's actual cash flow, rupiah. December carries a
-// year-end bonus in income and the holiday in spending.
+// Monthly money in vs money out, July to December 2026.
 export const CASHFLOW = [
-  { month: 'Jul', income: 9929876, spent: 9610000 },
-  { month: 'Aug', income: 9929876, spent: 9880000 },
-  { month: 'Sep', income: 10350000, spent: 10120000 },
-  { month: 'Oct', income: 9929876, spent: 9740000 },
-  { month: 'Nov', income: 9929876, spent: 9930000 },
-  { month: 'Dec', income: 11429876, spent: 10860000 },
+  { month: 'Jul', income: 9929876, spend: 9610000 },
+  { month: 'Agu', income: 9929876, spend: 9880000 },
+  { month: 'Sep', income: 10350000, spend: 10120000 },
+  { month: 'Okt', income: 9929876, spend: 9740000 },
+  { month: 'Nov', income: 9929876, spend: 9930000 },
+  { month: 'Des', income: 11429876, spend: 10860000 },
 ];
 
-// Savings goals, with what is already put by.
 export const GOALS = [
-  { name: 'Emergency fund', target: 29800000, saved: 12400000, monthly: 1000000, note: 'Three months of spending (3 × Rp9.93 million), kept in a separate account' },
-  { name: 'Children’s education fund', target: 50000000, saved: 8250000, monthly: 500000, note: 'For secondary school and beyond; grows with the savings line' },
-  { name: 'Family trip to Yogyakarta', target: 6000000, saved: 4800000, monthly: 300000, note: 'Train fares, three nights, and oleh-oleh for the grandparents' },
-  { name: 'A laptop for the shop', target: 9000000, saved: 2700000, monthly: 200000, note: 'Earner 2’s shop runs on a borrowed laptop today' },
+  {
+    id: 'emergency',
+    name: 'Dana darurat',
+    target: 29800000,
+    saved: 12400000,
+    monthly: 1000000,
+    note: 'Three months of spending (3 × Rp9,93 jt), kept in a separate account',
+  },
+  {
+    id: 'education',
+    name: 'Dana pendidikan anak',
+    target: 50000000,
+    saved: 8250000,
+    monthly: 500000,
+    note: 'For secondary school and beyond; grows with the savings line',
+  },
+  {
+    id: 'holiday',
+    name: 'Liburan keluarga ke Yogyakarta',
+    target: 6000000,
+    saved: 4800000,
+    monthly: 300000,
+    note: 'Train fares, three nights, and oleh-oleh for the grandparents',
+  },
+  {
+    id: 'laptop',
+    name: 'Laptop untuk toko',
+    target: 9000000,
+    saved: 2700000,
+    monthly: 200000,
+    note: "Earner 2's shop runs on a borrowed laptop today",
+  },
 ];
 
-// The fixed bills and the day each falls due — the checklist on the dashboard.
 export const BILLS = [
-  { name: 'Rent (kontrakan)', due: '1st', amount: 2200000, paid: true },
-  { name: 'BPJS Kesehatan premiums', due: 'by the 10th', amount: 350000, paid: true },
-  { name: 'School fees', due: 'by the 10th', amount: 650000, paid: true },
-  { name: 'Home internet', due: 'by the 15th', amount: 300000, paid: false },
-  { name: 'PDAM water bill', due: 'by the 20th', amount: 120000, paid: false },
-  { name: 'PLN electricity tokens', due: 'as needed', amount: 330000, paid: false },
-  { name: 'Motorbike cicilan', due: '24th', amount: 499876, paid: false },
-  { name: 'Phone packages ×2', due: '1st', amount: 100000, paid: true },
+  { id: 'bill-rent', name: 'Sewa kontrakan', due: 'due 1st', amount: 2200000, paid: true },
+  { id: 'bill-bpjs', name: 'BPJS Kesehatan', due: 'due by the 10th', amount: 350000, paid: true },
+  { id: 'bill-school', name: 'SPP sekolah', due: 'due by the 10th', amount: 650000, paid: true },
+  { id: 'bill-internet', name: 'Internet rumah', due: 'due by the 15th', amount: 300000, paid: false },
+  { id: 'bill-water', name: 'PDAM', due: 'due by the 20th', amount: 120000, paid: false },
+  { id: 'bill-power', name: 'Token PLN', due: 'due as needed', amount: 330000, paid: false },
+  { id: 'bill-bike', name: 'Cicilan motor', due: 'due 24th', amount: 499876, paid: false },
+  { id: 'bill-phone', name: 'Paket HP ×2', due: 'due 1st', amount: 100000, paid: true },
 ];
 
-// National benchmarks, so the example can be judged (BPS unless noted).
-export const BENCHMARKS = [
-  { label: 'Average spending, per person', value: 'Rp1,569,088', note: 'a month, all Indonesia — a family of four averages about Rp6.28 million before saving anything', source: 'BPS, Susenas March 2025' },
-  { label: 'Average spending in Jakarta', value: 'Rp2,962,412', note: 'per person a month; Rp1,153,404 of it (38.9%) is food', source: 'BPS, Susenas March 2025' },
-  { label: 'Average employee wage', value: 'Rp3.33 million', note: 'a month, all Indonesia', source: 'BPS, Sakernas August 2025' },
-  { label: 'Jakarta minimum wage (UMP)', value: 'Rp5,729,876', note: 'a month in 2026, up from Rp5,396,761 in 2025 — the highest in the country', source: 'Jakarta Governor Decree 1142/2025' },
-  { label: 'National poverty line', value: 'Rp641,443', note: 'per person a month — the floor a budget must never plan below', source: 'BPS, September 2025' },
-];
+// National figures from BPS, for the guide page.
+export const BENCHMARKS = {
+  perCapita: 1569088,
+  perCapitaNote: 'Average spending per person per month (Susenas, Mar 2025)',
+  jakartaPerCapita: 2962412,
+  jakartaFood: 1153404,
+  jakartaFoodShare: 38.9,
+  averageWage: 3330000,
+  averageWageNote: 'Average monthly wage (Sakernas, Aug 2025)',
+  ump2026: 5729876,
+  ump2025: 5396761,
+  povertyLine: 641443,
+  povertyNote: 'Poverty line per person per month (Sep 2025)',
+};
 
-// A healthy share-of-income range per category, for the guide page.
-export const GUIDE_RANGES = [
-  { name: 'Housing (rent or mortgage)', range: '20–30%', tip: 'Above 30% of income, every other line starts to starve. In Jakarta that often means a longer commute is the real price of cheaper rent.' },
-  { name: 'Food at home', range: '20–30%', tip: 'BPS counts food as 38.9% of a Jakartan’s spending. Cooking at home and a weekly market list are the two biggest levers.' },
-  { name: 'Transport', range: '5–12%', tip: 'A season pass or KRL card beats daily ojek fares; count petrol, parking and servicing together, not just fares.' },
-  { name: 'Utilities & phones', range: '5–10%', tip: 'Prepaid PLN tokens make electricity visible. Two streaming-and-data bundles per person is where this line quietly doubles.' },
-  { name: 'Education', range: '4–10%', tip: 'Plan school costs yearly, not monthly: enrolment and books land in one month and break a budget that forgot them.' },
-  { name: 'Health', range: '3–6%', tip: 'Keep BPJS premiums current — a lapsed card is the most expensive saving a household can make.' },
-  { name: 'Savings & emergency fund', range: '10–20%', tip: 'Pay it on payday, into a separate account. What is left at month-end is never what gets saved.' },
-  { name: 'Installments (cicilan)', range: 'under 10%', tip: 'Count every installment together — motorbike, phone, paylater. Above 30% of income in total debt payments is the danger line lenders watch.' },
-  { name: 'Fun & eating out', range: '3–8%', tip: 'A small, protected fun budget is what makes the rest of the plan survivable. Cutting it to zero is how budgets die in month two.' },
-];
-
-// Warning signs that a household budget is quietly failing, for the guide.
+// Five signs a budget is in trouble — each with why it matters and what to do.
 export const WARNING_SIGNS = [
-  { sign: 'The savings line is whatever is left', why: 'Saving what remains means saving nothing in a tight month. The month the emergency fund is raided is the month the plan has already failed.' },
-  { sign: 'One category is always over', why: 'A line that runs over every month is not overspending — it is a wrong budget. Raise the line and cut somewhere honest instead of re-breaking the same promise.' },
-  { sign: 'Payday loans or paylater cover the last week', why: 'Borrowing to reach month-end turns a Rp500.000 gap into a Rp600.000 bill next month. The gap grows every cycle until something breaks.' },
-  { sign: 'Nobody knows what was spent yesterday', why: 'A budget no one writes down is a guess. Five minutes of logging a week is what turns the plan from a wish into a record.' },
-  { sign: 'Every month starts with a surprise bill', why: 'School fees, vehicle tax, Eid clothes and the annual BPJS catch-up are all predictable. A month that "suddenly" costs more was planned with the calendar closed.' },
+  {
+    title: 'Tabungan = sisa belaka',
+    why: 'Saving whatever is left means saving nothing in a tight month — and tight months are most months.',
+    fix: 'Move the savings line out on payday, before any spending. If it is not moved first, it does not exist.',
+  },
+  {
+    title: 'Satu kategori selalu jebol tiap bulan',
+    why: 'A line that overshoots every month is not a discipline problem; the number was wrong from the start.',
+    fix: 'Raise that line to what it really costs and take the difference from a wants line, openly, instead of pretending.',
+  },
+  {
+    title: 'Pinjaman / paylater menutup minggu terakhir',
+    why: 'Borrowing to reach payday turns next month into a smaller month, and the gap grows each cycle.',
+    fix: 'Freeze new borrowing for one month, list every instalment with its end date, and pay the smallest one off first.',
+  },
+  {
+    title: 'Tidak ada yang tahu uang kemarin ke mana',
+    why: 'Money with no record leaks through small, forgettable spends — the exact ones that add up to a salary.',
+    fix: 'Write down every spend for seven days, however small. The pattern usually names itself by day three.',
+  },
+  {
+    title: 'Tiap bulan dimulai dengan tagihan kejutan',
+    why: 'A bill that surprises you was never in the plan; surprise bills are paid from the savings line.',
+    fix: 'List every recurring bill with its date on one page, and set aside its amount the day the salary lands.',
+  },
+];
+
+// Planner presets. Each preset's lines sum exactly to its income.
+export const PRESETS = [
+  {
+    id: 'jakarta-family',
+    name: 'Family of four · Jakarta',
+    blurb: 'The Prameswari household, as shown on this site',
+    incomes: [
+      { id: 'earner-one', label: 'Earner 1 — full-time salary', amount: 5729876 },
+      { id: 'earner-two', label: 'Earner 2 — online shop & freelance', amount: 4200000 },
+    ],
+    amounts: {
+      rent: 2200000, kitchen: 2400000, transport: 800000, utilities: 750000,
+      school: 650000, health: 350000, parents: 350000, 'eating-out': 600000,
+      extras: 330000, savings: 1000000, bike: 499876,
+    },
+  },
+  {
+    id: 'single-ump',
+    name: 'Single · Jakarta minimum wage',
+    blurb: 'One salary, one room, the same eleven lines',
+    incomes: [
+      { id: 'earner-one', label: 'Salary — Jakarta UMP 2026', amount: 5729876 },
+      { id: 'earner-two', label: 'Side income', amount: 0 },
+    ],
+    amounts: {
+      rent: 1200000, kitchen: 1100000, transport: 500000, utilities: 450000,
+      school: 200000, health: 200000, parents: 300000, 'eating-out': 350000,
+      extras: 200000, savings: 729876, bike: 500000,
+    },
+  },
+  {
+    id: 'small-city-family',
+    name: 'Family of four · smaller city',
+    blurb: 'Lower rent, lower prices, same discipline',
+    incomes: [
+      { id: 'earner-one', label: 'Earner 1 — full-time salary', amount: 4000000 },
+      { id: 'earner-two', label: 'Earner 2 — shop & freelance', amount: 2500000 },
+    ],
+    amounts: {
+      rent: 900000, kitchen: 1800000, transport: 500000, utilities: 500000,
+      school: 500000, health: 250000, parents: 250000, 'eating-out': 300000,
+      extras: 200000, savings: 800000, bike: 500000,
+    },
+  },
+];
+
+export const GROUP_LABELS = {
+  needs: 'Needs',
+  wants: 'Wants',
+  future: 'Future',
+};
+
+export const GROUP_ORDER = ['needs', 'wants', 'future'];
+
+// A small palette for the donut chart, one colour per category in order.
+export const DONUT_COLORS = [
+  '#1f6b4a', '#c47f17', '#2f6fb2', '#a34d6e', '#6b7c2e',
+  '#4a7a6f', '#8a5a2b', '#b3543f', '#5b6abf', '#3d8f7a', '#7a6a9e',
 ];
